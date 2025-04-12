@@ -1,35 +1,54 @@
-from SmartApi.smartConnect import SmartConnect
-import pyotp
 import os
+from smartapi import SmartConnect
 from dotenv import load_dotenv
+from modules.token_finder import TokenFinder
 
 load_dotenv()
 
 class AngelExecutor:
     def __init__(self):
-        self.api_key = os.getenv("ANGEL_API_KEY")
+        self.api = SmartConnect(api_key=os.getenv("ANGEL_API_KEY"))
         self.client_code = os.getenv("ANGEL_CLIENT_CODE")
-        self.pin = os.getenv("ANGEL_PIN")
-        self.totp_secret = os.getenv("ANGEL_TOTP_SECRET")
-        self.smartapi = SmartConnect(api_key=self.api_key)
+        self.password = os.getenv("ANGEL_PASSWORD")
+        self.totp = os.getenv("ANGEL_TOTP")
+        self.token_finder = TokenFinder()
 
-    def generate_token(self):
-        totp = pyotp.TOTP(self.totp_secret).now()
-        data = self.smartapi.generateSession(self.client_code, self.pin, totp)
-        return data
+    def login(self):
+        try:
+            data = self.api.generateSession(self.client_code, self.password, self.totp)
+            self.auth_token = data['data']['jwtToken']
+            self.refresh_token = data['data']['refreshToken']
+            print("Angel One Login Successful.")
+            return True
+        except Exception as e:
+            print("Login Failed:", e)
+            return False
 
-    def place_order(self, symbol, strike_price, side, quantity, product_type="INTRADAY"):
-        order_type = "BUY" if side == "CE" else "SELL"
-        order = self.smartapi.placeOrder({
+    def place_order(self, symbol: str, quantity: int, transaction_type: str, order_type: str = "MARKET"):
+        print(f"Placing order for {symbol} - {transaction_type}")
+        token = self.token_finder.get_token(symbol)
+
+        if not token:
+            print(f"Token not found for {symbol}")
+            return False
+
+        order_params = {
             "variety": "NORMAL",
             "tradingsymbol": symbol,
-            "symboltoken": "UNIQUE_TOKEN",  # Will map from instrument
-            "transactiontype": order_type,
+            "symboltoken": str(token),
+            "transactiontype": transaction_type,
             "exchange": "NFO",
-            "ordertype": "MARKET",
-            "producttype": product_type,
+            "ordertype": order_type,
+            "producttype": "INTRADAY",
             "duration": "DAY",
-            "price": 0,
+            "price": "0",
             "quantity": quantity
-        })
-        return order
+        }
+
+        try:
+            order_id = self.api.placeOrder(order_params)
+            print(f"Order placed successfully. ID: {order_id}")
+            return order_id
+        except Exception as e:
+            print("Order Failed:", e)
+            return False
