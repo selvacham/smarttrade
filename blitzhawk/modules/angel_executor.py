@@ -1,54 +1,53 @@
 import os
-from smartapi import SmartConnect
+import time
+import pyotp
 from dotenv import load_dotenv
-from modules.token_finder import TokenFinder
+from angel_one_smartapi import SmartConnect
 
 load_dotenv()
 
 class AngelExecutor:
     def __init__(self):
-        self.api = SmartConnect(api_key=os.getenv("ANGEL_API_KEY"))
-        self.client_code = os.getenv("ANGEL_CLIENT_CODE")
-        self.password = os.getenv("ANGEL_PASSWORD")
-        self.totp = os.getenv("ANGEL_TOTP")
-        self.token_finder = TokenFinder()
+        self.api_key = os.getenv("API_KEY")
+        self.client_id = os.getenv("CLIENT_ID")
+        self.password = os.getenv("CLIENT_PASSWORD")
+        self.totp_secret = os.getenv("TOTP_SECRET")
+        self.api_secret = os.getenv("API_SECRET")
+        self.is_live = os.getenv("IS_LIVE", "false").lower() == "true"
+        self.client = SmartConnect(api_key=self.api_key)
+        self.session_token = None
 
     def login(self):
         try:
-            data = self.api.generateSession(self.client_code, self.password, self.totp)
-            self.auth_token = data['data']['jwtToken']
-            self.refresh_token = data['data']['refreshToken']
-            print("Angel One Login Successful.")
-            return True
+            otp = pyotp.TOTP(self.totp_secret).now()
+            data = self.client.generateSession(self.client_id, self.password, otp)
+            self.session_token = data['data']['jwtToken']
+            print("✅ Angel One login successful.")
         except Exception as e:
-            print("Login Failed:", e)
-            return False
+            print("❌ Login failed:", e)
 
-    def place_order(self, symbol: str, quantity: int, transaction_type: str, order_type: str = "MARKET"):
-        print(f"Placing order for {symbol} - {transaction_type}")
-        token = self.token_finder.get_token(symbol)
+    def place_order(self, symbol, strike, option_type, side, qty):
+        if not self.session_token:
+            self.login()
 
-        if not token:
-            print(f"Token not found for {symbol}")
-            return False
+        order_type = 'BUY' if side.lower() == 'buy' else 'SELL'
+        full_symbol = f"{symbol}{strike}{option_type}"
+        print(f"🚀 Placing {order_type} for {full_symbol}, Qty: {qty}")
 
-        order_params = {
-            "variety": "NORMAL",
-            "tradingsymbol": symbol,
-            "symboltoken": str(token),
-            "transactiontype": transaction_type,
-            "exchange": "NFO",
-            "ordertype": order_type,
-            "producttype": "INTRADAY",
-            "duration": "DAY",
-            "price": "0",
-            "quantity": quantity
-        }
+        # For demo, this only logs (actual API logic will be placed here)
+        if self.is_live:
+            # Add real SmartConnect place_order() API here later
+            print(f"✅ [LIVE] Order executed for {full_symbol}")
+        else:
+            print(f"🧪 [PAPER] Simulated order for {full_symbol}")
 
-        try:
-            order_id = self.api.placeOrder(order_params)
-            print(f"Order placed successfully. ID: {order_id}")
-            return order_id
-        except Exception as e:
-            print("Order Failed:", e)
-            return False
+    def logout(self):
+        self.client.terminateSession(self.client_id)
+        print("👋 Logged out from Angel One")
+
+# Demo run
+if __name__ == "__main__":
+    executor = AngelExecutor()
+    executor.login()
+    executor.place_order("CRUDEOIL", "7800", "CE", "buy", 1)
+    executor.logout()

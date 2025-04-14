@@ -8,7 +8,7 @@ import ttkbootstrap as ttk
 from services.auth import register_user, login_user
 
 # Launch manual UI after login
-from manual_order_ui import launch_manual_order_ui
+from ui.manual_order_ui import launch_manual_order_ui
 
 def launch_login_register_ui():
     app = Window(themename="darkly")

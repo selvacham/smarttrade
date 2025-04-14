@@ -1,0 +1,13 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Webhook Server",
+            "type": "shell",
+            "command": "python webhook_server.py",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Runs the webhook listener."
+        }
+    ]
+}
